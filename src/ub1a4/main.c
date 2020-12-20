@@ -59,10 +59,10 @@ int main(int argc, char *argv[]) {
     }
 
     memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_INET;    /* Allow IPv4 */
-    hints.ai_socktype = SOCK_STREAM; /* Datagram socket */
-    hints.ai_flags = AI_PASSIVE;    /* For wildcard IP address */
-    hints.ai_protocol = 0;          /* Any protocol */
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_protocol = 0;
     hints.ai_canonname = NULL;
     hints.ai_addr = NULL;
     hints.ai_next = NULL;
@@ -75,26 +75,28 @@ int main(int argc, char *argv[]) {
 
     for (rp = result; rp != NULL; rp = rp->ai_next) {
         sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-        if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0) {
+        if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &(int) {1}, sizeof(int)) < 0) {
             logger(error, "Was not able to rebind address!");
             exit(1);
         }
-        if (sfd == -1)
+        if (sfd == -1) {
             continue;
+        }
         // bind the socket to a local port
-        if (bind(sfd, rp->ai_addr, rp->ai_addrlen) == 0)
+        if (bind(sfd, rp->ai_addr, rp->ai_addrlen) == 0) {
             break;                  /* Success */
-
+        }
         close(sfd);
     }
 
-    if (rp == NULL) {               /* No address succeeded */
+    // No address worked
+    if (rp == NULL) {
         logger(error, "Was not able to bind address");
         exit(EXIT_FAILURE);
     }
     logger(info, "Bound successfully");
 
-    freeaddrinfo(result);           /* No longer needed */
+    freeaddrinfo(result);
 
     if (listen(sfd, MAX_CONN) < 0) {
         logger(error, "Was not able to listen!");
@@ -103,7 +105,7 @@ int main(int argc, char *argv[]) {
     logger(info, "Listening...");
 
     /* Wait for incoming connection requests */
-    for (int i = 0; i < 1; i++) {
+    for (;;) {
         logger(info, "Wait for incoming connection requests");
         int cfd = accept(sfd, rp->ai_addr, &rp->ai_addrlen);
         if (cfd < 0) {
@@ -123,7 +125,6 @@ int main(int argc, char *argv[]) {
             close(cfd);
             logger(info, "Disconnected...");
         }
-        i--;
     }
 }
 

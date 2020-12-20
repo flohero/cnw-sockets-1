@@ -31,7 +31,7 @@ void logger(log_level lvl, char *msg) {
     }
 }
 
-void logger_with_template(log_level lvl, char *template, const void *msg) {
+void log_with_template(log_level lvl, char *template, const void *msg) {
     switch (lvl) {
         case info:
             printf("[INFO] ");
@@ -54,49 +54,52 @@ int main(int argc, char *argv[]) {
     int sfd, s;
 
     if (argc != 2) {
-        logger_with_template(error, "Usage: %s port", argv[0]);
+        log_with_template(error, "Usage: %s port", argv[0]);
         exit(EXIT_FAILURE);
     }
 
     memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_INET;    /* Allow IPv4 */
-    hints.ai_socktype = SOCK_STREAM; /* Datagram socket */
-    hints.ai_flags = AI_PASSIVE;    /* For wildcard IP address */
-    hints.ai_protocol = 0;          /* Any protocol */
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_protocol = 0;
     hints.ai_canonname = NULL;
     hints.ai_addr = NULL;
     hints.ai_next = NULL;
 
     s = getaddrinfo(NULL, argv[1], &hints, &result);
     if (s != 0) {
-        logger_with_template(error, "getaddrinfo: %s", gai_strerror(s));
+        log_with_template(error, "getaddrinfo: %s", gai_strerror(s));
         exit(EXIT_FAILURE);
     }
 
     for (rp = result; rp != NULL; rp = rp->ai_next) {
         sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-        if (sfd == -1)
+        if (sfd == -1) {
             continue;
+        }
         // bind the socket to a local port
-        if (bind(sfd, rp->ai_addr, rp->ai_addrlen) == 0)
+        if (bind(sfd, rp->ai_addr, rp->ai_addrlen) == 0) {
             break;                  /* Success */
-
+        }
         close(sfd);
     }
 
-    if (rp == NULL) {               /* No address succeeded */
+    // No address worked
+    if (rp == NULL) {
         logger(error, "Was not able to bind address");
         exit(EXIT_FAILURE);
     }
     logger(info, "Bound successfully");
 
-    freeaddrinfo(result);           /* No longer needed */
+    freeaddrinfo(result);
 
     if (listen(sfd, MAX_CONN) < 0) {
         logger(error, "Was not able to listen!");
         exit(EXIT_FAILURE);
     }
     logger(info, "Listening...");
+
 
     /* Wait for incoming connection requests */
     for (;;) {
@@ -105,14 +108,14 @@ int main(int argc, char *argv[]) {
         if (cfd < 0) {
             logger(error, "Was not able to connect!");
         } else {
-            logger_with_template(info, "Accepted with cfd: %d", cfd);
+            log_with_template(info, "Accepted with cfd: %d", cfd);
 
             // sock_addr to ip representation
             struct sockaddr_in *sock_in = (struct sockaddr_in*) rp->ai_addr;
             char ip_addr[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &(sock_in->sin_addr), ip_addr,INET_ADDRSTRLEN);
 
-            logger_with_template(info, "IP Address: %s", ip_addr);
+            log_with_template(info, "IP Address: %s", ip_addr);
 
             serve(cfd);
             close(cfd);
