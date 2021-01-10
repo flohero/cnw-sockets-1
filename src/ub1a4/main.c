@@ -13,40 +13,9 @@
 
 #define MAX_CONN 1
 
-typedef enum {
-  info,
-  error
-} log_level;
+extern void serve(int fd);
 
-void logger(log_level lvl, char *msg) {
-  switch (lvl) {
-    case info:
-      printf("[INFO] %s\n", msg);
-      break;
-    case error:
-      fprintf(stderr, "[ERR] %s\n", msg);
-      break;
-    default:
-      break;
-  }
-}
-
-void log_with_template(log_level lvl, char *template, const void *msg) {
-  switch (lvl) {
-    case info:
-      printf("[INFO] ");
-      printf(template, msg);
-      printf("\n");
-      break;
-    case error:
-      fprintf(stderr, "[ERR] ");
-      fprintf(stderr, template, msg);
-      fprintf(stderr, "\n");
-      break;
-    default:
-      break;
-  }
-}
+void print_ip_addr(const struct sockaddr *sock_add);
 
 int main(int argc, char *argv[]) {
   struct addrinfo hints;
@@ -54,12 +23,11 @@ int main(int argc, char *argv[]) {
   int sfd, s;
 
   if (argc != 2) {
-    log_with_template(error, "Usage: %s port", argv[0]);
     exit(EXIT_FAILURE);
   }
 
   memset(&hints, 0, sizeof(struct addrinfo));
-  hints.ai_family = AF_INET;
+  hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE;
   hints.ai_protocol = 0;
@@ -69,14 +37,12 @@ int main(int argc, char *argv[]) {
 
   s = getaddrinfo(NULL, argv[1], &hints, &result);
   if (s != 0) {
-    log_with_template(error, "getaddrinfo: %s", gai_strerror(s));
     exit(EXIT_FAILURE);
   }
 
   for (rp = result; rp != NULL; rp = rp->ai_next) {
     sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
     if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &(int) {1}, sizeof(int)) < 0) {
-      logger(error, "Was not able to rebind address!");
       exit(1);
     }
     if (sfd == -1) {
@@ -91,40 +57,45 @@ int main(int argc, char *argv[]) {
 
   // No address worked
   if (rp == NULL) {
-    logger(error, "Was not able to bind address");
     exit(EXIT_FAILURE);
   }
-  logger(info, "Bound successfully");
   if (listen(sfd, MAX_CONN) < 0) {
-    logger(error, "Was not able to listen!");
     exit(EXIT_FAILURE);
   }
-  logger(info, "Listening...");
 
   /* Wait for incoming connection requests */
   int running = 1;
   while (running) {
-    logger(info, "Wait for incoming connection requests");
     int cfd = accept(sfd, rp->ai_addr, &rp->ai_addrlen);
     if (cfd < 0) {
-      logger(error, "Was not able to connect!");
       running = 0;
     } else {
-      log_with_template(info, "Accepted with cfd: %d", cfd);
-
-      // sock_addr to ip representation
-      struct sockaddr_in *sock_in = (struct sockaddr_in *) rp->ai_addr;
-      char ip_addr[INET_ADDRSTRLEN];
-      inet_ntop(AF_INET, &(sock_in->sin_addr), ip_addr, INET_ADDRSTRLEN);
-
-      log_with_template(info, "IP Address: %s", ip_addr);
-      log_with_template(info, "Port: %d", sock_in->sin_port);
-
+      print_ip_addr(rp->ai_addr);
       serve(cfd);
       close(cfd);
-      logger(info, "Disconnected...");
     }
   }
   close(sfd);
 }
 
+
+void print_ip_addr(const struct sockaddr *sock_add) {
+  switch (sock_add->sa_family) {
+    case AF_INET: {
+      char str_addr[INET_ADDRSTRLEN];
+      struct sockaddr_in * sa = (struct sockaddr_in *) sock_add;
+      inet_ntop(AF_INET, &(sa->sin_addr), str_addr, INET_ADDRSTRLEN);
+      printf("%s:%d\n", str_addr, ntohs(sa->sin_port));
+      break;
+    }
+    case AF_INET6: {
+      char str_addr[INET6_ADDRSTRLEN];
+      struct sockaddr_in6 *sa = (struct sockaddr_in6 *) sock_add;
+      inet_ntop(AF_INET6, &((sa)->sin6_addr), str_addr, INET6_ADDRSTRLEN);
+      printf("%s:%d\n", str_addr, ntohs(sa->sin6_port));
+      break;
+    }
+    default:
+      fprintf(stderr, "Address Family not implemented\n");
+  }
+}
